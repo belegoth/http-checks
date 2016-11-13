@@ -18,15 +18,15 @@ import requests
 
 log = logging.getLogger(__name__)
 
-def send_metric_to_carbon(metric_name, value, graphite_host, graphite_port, ts=None):
-    if not ts:
-        ts = int(time.time())
-    message = '%s %s %d\n' % (metric_name, value, int(ts))
-    log.info("sending to graphite %s", message)
-    sock = socket.socket()
-    sock.connect((graphite_host, graphite_port))
-    sock.sendall(message)
-    sock.close()
+# def send_metric_to_carbon(metric_name, value, graphite_host, graphite_port, ts=None):
+#     if not ts:
+#         ts = int(time.time())
+#     message = '%s %s %d\n' % (metric_name, value, int(ts))
+#     log.info("sending to graphite %s", message)
+#     sock = socket.socket()
+#     sock.connect((graphite_host, graphite_port))
+#     sock.sendall(message)
+#     sock.close()
 
 # Monkey-patch.
 gmonkey.patch_all(thread=False, select=False)
@@ -174,15 +174,9 @@ def check_json(req):
             return matches[0].value == v
 
 
-def notify_by_slack(url, channel, username, description, icon_emoji):
-    payload = {"channel": channel,
-               "username": username,
-               "text": str(description),
-               "icon_emoji": icon_emoji}
+def notify_by_ovo(url, channel, username, description, icon_emoji):
+    pass
 
-    requests.post(url, dict(
-        payload=json.dumps(payload)
-    ))
 
 def get_request(k, urlconf, callback=None, session=None):
     r = AsyncRequest(
@@ -224,9 +218,9 @@ def finished(result):
     global exit_code, finished_jobs
     finished_jobs += 1
 
-    if not result:
-        # if any of the tests fail we fail too
-        exit_code = 2
+    # if not result:
+    #     # if any of the tests fail we fail too
+    #     exit_code = 2
 
     if finished_jobs == len(sync_map):
         log.info('all waiting jobs are completed.')
@@ -291,11 +285,11 @@ def main():
 
     logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
 
-    graphite_host = config['settings'].get('graphite_host')
-    try:
-        graphite_port = int(config['settings'].get('graphite_port'))
-    except:
-        graphite_port = None
+    # graphite_host = config['settings'].get('graphite_host')
+    # try:
+    #     graphite_port = int(config['settings'].get('graphite_port'))
+    # except:
+    #     graphite_port = None
 
     rs = []
 
@@ -326,14 +320,14 @@ def main():
             if not check(req):
                 failed = True
                 log.critical('[%s] FAILED check - %s', req.name, check.__name__)
-                slack_config = config['settings'].get('slack', None)
-                if slack_config:
-                    notify_by_slack(
-                        url = slack_config['url'],
-                        channel  = slack_config['channel'],
-                        username  = slack_config['username'],
-                        description  = '[%s] FAILED check - %s - %s' % (req.name, req.url, check.__name__),
-                        icon_emoji = slack_config['icon_emoji']
+                ovo_config = config['settings'].get('ovo', None)
+                if ovo_config:
+                    notify_by_ovo(
+                        # url = slack_config['url'],
+                        # channel  = slack_config['channel'],
+                        # username  = slack_config['username'],
+                        # description  = '[%s] FAILED check - %s - %s' % (req.name, req.url, check.__name__),
+                        # icon_emoji = slack_config['icon_emoji']
                     )
                 break
 
@@ -342,13 +336,13 @@ def main():
         else:
             exit_code = 2
 
-        if not config['settings'].get('dry_run', False) \
-            and graphite_host and graphite_port:
-            send_metric_to_carbon('http_check.%s' % req.name,
-                              elapsed,
-                              graphite_host=graphite_host,
-                              graphite_port=graphite_port)
-        else:
+        # if not config['settings'].get('dry_run', False) \
+        #     and graphite_host and graphite_port:
+        #     send_metric_to_carbon('http_check.%s' % req.name,
+        #                       elapsed,
+        #                       graphite_host=graphite_host,
+        #                       graphite_port=graphite_port)
+        # else:
             log.info("[%s] completed in %s", req.name, elapsed)
 
     if sync_map:
