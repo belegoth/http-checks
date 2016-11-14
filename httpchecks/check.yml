@@ -2,7 +2,7 @@ settings:
 #    graphite_host: localhost
     graphite_host:
     graphite_port: 2003
-    pool_size: 1
+    pool_size: 10
     # if you dont want to send to graphite. Useful for deploy scripts etc.
     # you can set dry_run false or just leave graphite_host or graphite_port blank
     dry_run: True
@@ -22,6 +22,7 @@ urls:
         allow_redirects: False
         # check if status code is 301 or 302
         status_code: [301, 302]
+        check_sert: True
 
     yandex:
         url: http://www.yandex.ru/

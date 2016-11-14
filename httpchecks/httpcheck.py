@@ -37,7 +37,7 @@ class AsyncRequest(object):
         self.method = method
         #: URL to request
         self.url = url
-        self.hostname = url.split("//")[-1].split("/")[0]
+        self.domain_name = url.split("//")[-1].split("/")[0]
         #: Associated ``Session``
         self.session = kwargs.pop('session', None)
         if self.session is None:
@@ -76,7 +76,7 @@ class AsyncRequest(object):
         except Exception as e:
             self.response = None
             self.error = e
-            # log.exception("[%s] gave exception" % self.url)
+            log.exception("[%s] gave exception" % self.url)
             return
         return self.response
 
@@ -121,10 +121,10 @@ def ssl_expires_in(hostname, buffer_days=14):
         log.warn("Cert expired %s days ago" % remaining.days)
     elif remaining < datetime.timedelta(days=buffer_days):
         # expires sooner than the buffer
-        return True
+        return False
     else:
         # everything is fine
-        return False
+        return True
 
 def send(r, pool=None, stream=False, callback=None):
     """Sends the request object using the specified pool. If a pool isn't
@@ -165,9 +165,10 @@ def check_response(req):
     log.debug("[%s] response %s ", req.url, resp_content)
     return req.response
 
-def check_check_cert(req):
+def check_cert(req):
     if not req.check_cert:
         return True
+    return ssl_expires_in(req.domain_name)
     #
     #
     #
@@ -196,9 +197,11 @@ def get_request(k, urlconf, callback=None, session=None):
             data = urlconf.get('data', None),
             session = session,
             callback = callback
+
         )
     r.name = k
     r.waiting_status_code = urlconf.get('status_code', None)
+    r.check_cert = urlconf.get('check_sert', True)
     if not r.waiting_status_code:
         r.waiting_status_code = [200]
 
@@ -206,7 +209,8 @@ def get_request(k, urlconf, callback=None, session=None):
 
 checks = [
     check_response,
-    check_status_code
+    check_status_code,
+    check_cert
  ]
 
 
@@ -223,53 +227,6 @@ def finished(result):
     if finished_jobs == len(sync_map):
         log.info('all waiting jobs are completed.')
         ready.set()
-
-
-class SessionedChecks(object):
-    """
-    this is just a container for tests with sessions
-    """
-    def __init__(self, name):
-        self.name = name
-        self.session = Session()
-        self.steps = []
-        self.step_num = 0
-
-    def add(self, rs):
-        self.steps.append(rs)
-
-
-    def next(self):
-        try:
-            step = self.steps[self.step_num]
-            self.step_num += 1
-            return step
-        except IndexError:
-            return None
-
-    def run_cb(self, *args, **kwargs):
-        next_req = self.next()
-
-        if next_req:
-            for check in checks:
-                self.result = check(args[0].request)
-                if not self.result:
-                    log.warn("[%s] test failed - step:%s - %s" % (self.name, self.step_num-2, self.steps[self.step_num-2].url))
-                    finished(False)
-                    return
-            self.run(next_req)
-        else:
-            finished(True)
-
-    def run(self, rs=None):
-
-        if not rs:
-            rs = self.next()
-
-        p = gevent.spawn(rs.send, stream=None)
-        p.request = rs
-        p.link(self.run_cb)
-
 
 exit_code = 0
 
