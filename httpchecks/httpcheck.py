@@ -14,6 +14,7 @@ import os
 import ssl
 import datetime
 
+
 log = logging.getLogger(__name__)
 # Monkey-patch.
 gmonkey.patch_all(thread=False, select=False)
@@ -36,6 +37,7 @@ class AsyncRequest(object):
         self.method = method
         #: URL to request
         self.url = url
+        self.hostname = url.split("//")[-1].split("/")[0]
         #: Associated ``Session``
         self.session = kwargs.pop('session', None)
         if self.session is None:
@@ -55,6 +57,7 @@ class AsyncRequest(object):
         self.name = None
         self.waiting_status_code = None
         self.check_cert = None
+
 
 
     def send(self, **kwargs):
@@ -162,7 +165,21 @@ def check_response(req):
     log.debug("[%s] response %s ", req.url, resp_content)
     return req.response
 
-
+def check_check_cert(req):
+    if not req.check_cert:
+        return True
+    #
+    #
+    #
+    #
+    # j = json.loads(req.response.content)
+    # for check in req.check_json:
+    #     for k, v in check.items():
+    #         path = parse(k)
+    #         matches = path.find(j)
+    #         if not matches:
+    #             return False
+    #         return matches[0].value == v
 
 def notify_by_ovo(url, channel, username, description, icon_emoji):
     pass
