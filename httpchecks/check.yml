@@ -2,58 +2,73 @@ settings:
 #    graphite_host: localhost
     graphite_host:
     graphite_port: 2003
-    pool_size: 50
+    pool_size: 1
     # if you dont want to send to graphite. Useful for deploy scripts etc.
     # you can set dry_run false or just leave graphite_host or graphite_port blank
     dry_run: True
     log_level: DEBUG
 
-     alert to slack if you want to
+#     alert to ovo if you want to
     ovo:
-        msg_grp = PR_HTTP
-        username: 'alertus'
-        icon_emoji: ':warning:'
+#        msg_grp = PR_HTTP
+#        username: 'alertus'
+#        icon_emoji: ':warning:'
 
 
 urls:
     google:
+
         url: http://www.google.com/
+        allow_redirects: False
+        # check if status code is 301 or 302
+        status_code: [301, 302]
+
+    yandex:
+        url: http://www.yandex.ru/
         # dont follow redirects
         allow_redirects: False
         # check if status code is 301 or 302
         status_code: [301, 302]
 
-    someapp:
-        url: http://localhost:8888/
+    yan22dex:
+        url: http://www.yan23132342354dex.ru/
         # dont follow redirects
         allow_redirects: False
         # check if status code is 301 or 302
         status_code: [301, 302]
-        # you can send headers as you like mostly useful for checking servers
-        # internally
-        header:
-            Host: python.org
 
-    org.python:
-        url: http://www.python.org/
 
-        # this will check this text exists in html source
-        text: Python is a programming language that lets you work quickly
+#    someapp:
+#        url: http://localhost:8888/
+#        # dont follow redirects
+#        allow_redirects: False
+#        # check if status code is 301 or 302
+#        status_code: [301, 302]
+#        # you can send headers as you like mostly useful for checking servers
+#        # internally
+#        header:
+#            Host: python.org
 
-        # some html checks
-        html:
-            # this will check if title element == Welcome to Python.org
-            - title: Welcome to Python.org
-            # or write a reqular expression, surround your reg. exp. with ~/ /
-            - title: ~/.*Python.*/
-            # we pass selector directly to (beatifulsoup.select)[http://www.crummy.com/software/BeautifulSoup/bs4/doc/#css-selectors]
-            # so you can write this - check if element exists
-            #
-            # <h1 class="site-headline">
-            #        <a href="/"><img class="python-logo" src="/static/img/python-logo.png" alt="python&trade;"></a>
-            # </h1>
-            #
-            - h1.site-headline > a > img.python-logo: ~//
+#    org.python:
+#        url: http://www.python.org/
+#
+#        # this will check this text exists in html source
+##        text: Python is a programming language that lets you work quickly
+#
+#        # some html checks
+#        html:
+#            # this will check if title element == Welcome to Python.org
+#            - title: Welcome to Python.org
+#            # or write a reqular expression, surround your reg. exp. with ~/ /
+#            - title: ~/.*Python.*/
+#            # we pass selector directly to (beatifulsoup.select)[http://www.crummy.com/software/BeautifulSoup/bs4/doc/#css-selectors]
+#            # so you can write this - check if element exists
+#            #
+#            # <h1 class="site-headline">
+#            #        <a href="/"><img class="python-logo" src="/static/img/python-logo.png" alt="python&trade;"></a>
+#            # </h1>
+#            #
+#            - h1.site-headline > a > img.python-logo: ~//
 
 
     # you can also use more than one url, for testing scenerios.
@@ -65,29 +80,29 @@ urls:
     #
     # a scenerio test, uses the same session in individual urls. but doesn't share
     # the session in other scenerios.
-    test-login:
-        -
-            url: http://localhost:5000/?first=1
-
-        # check home page
-        -
-            url: http://localhost:5000/
-
-        # now get login
-        -
-            url: http://localhost:5000/login
-
-        # post to login
-        -
-            url: http://localhost:5000/login
-            method: POST
-            data:
-                username: xyz
-                password: 123
-        -
-            # now go back to / and see if our username is there
-            url: http://localhost:5000/
-            text: xyz
-        -
-            # now go back to / and see if our username is there
-            url: http://localhost:5000/last
+#    test-login:
+#        -
+#            url: http://localhost:5000/?first=1
+#
+#        # check home page
+#        -
+#            url: http://localhost:5000/
+#
+#        # now get login
+#        -
+#            url: http://localhost:5000/login
+#
+#        # post to login
+#        -
+#            url: http://localhost:5000/login
+#            method: POST
+#            data:
+#                username: xyz
+#                password: 123
+#        -
+#            # now go back to / and see if our username is there
+#            url: http://localhost:5000/
+#            text: xyz
+#        -
+#            # now go back to / and see if our username is there
+#            url: http://localhost:5000/last
