@@ -33,6 +33,8 @@ gmonkey.patch_all(thread=False, select=False)
 
 from requests import Session
 
+
+
 class AsyncRequest(object):
     """ Asynchronous request.
 
@@ -239,6 +241,8 @@ class SessionedChecks(object):
 
     def add(self, rs):
         self.steps.append(rs)
+
+        # trte
 
     def next(self):
         try:
