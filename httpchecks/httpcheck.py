@@ -13,14 +13,15 @@ import sys
 import os
 import ssl
 import datetime
+import requests
 
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
+from requests import Session
 
 log = logging.getLogger(__name__)
 # Monkey-patch.
 gmonkey.patch_all(thread=False, select=False)
-
-from requests import Session
-
 
 
 class AsyncRequest(object):
@@ -32,6 +33,7 @@ class AsyncRequest(object):
     :param callback: Callback called on response.
                      Same as passing ``hooks={'response': callback}``
     """
+
     def __init__(self, method, url, **kwargs):
         #: Request method
         self.method = method
@@ -58,8 +60,6 @@ class AsyncRequest(object):
         self.waiting_status_code = None
         self.check_cert = None
 
-
-
     def send(self, **kwargs):
         """
         Prepares request based on parameter passed to constructor and optional ``kwargs```.
@@ -72,16 +72,16 @@ class AsyncRequest(object):
         merged_kwargs.update(kwargs)
         try:
             self.response = self.session.request(self.method,
-                                              self.url, **merged_kwargs)
-        except Exception as e:
-            self.response = None
-            self.error = e
-            log.exception("[%s] gave exception" % self.url)
-            return
+                                                 self.url, **merged_kwargs)
+        except:
+            log.error("cannot open [%s]" % self.url)
+            # log.exception("[%s] gave exception" % self.url)
+            # return
         return self.response
 
     def __repr__(self):
         return "<AsyncRequest %s>" % self.url
+
 
 def ssl_expiry_datetime(hostname):
     ssl_date_fmt = r'%b %d %H:%M:%S %Y %Z'
@@ -99,14 +99,16 @@ def ssl_expiry_datetime(hostname):
     # parse the string from the certificate into a Python datetime object
     return datetime.datetime.strptime(ssl_info['notAfter'], ssl_date_fmt)
 
+
 def ssl_valid_time_remaining(hostname):
     """Get the number of days left in a cert's lifetime."""
     expires = ssl_expiry_datetime(hostname)
-    log.debug(
-        "SSL cert for %s expires at %s",
-        hostname, expires.isoformat()
-    )
+    # log.debug(
+    #        "SSL cert for %s expires at %s",
+    #       hostname, expires.isoformat()
+    #  )
     return expires - datetime.datetime.utcnow()
+
 
 def ssl_expires_in(hostname, buffer_days=14):
     """Check if `hostname` SSL cert expires is within `buffer_days`.
@@ -118,13 +120,15 @@ def ssl_expires_in(hostname, buffer_days=14):
     # if the cert expires in less than two weeks, we should reissue it
     if remaining < datetime.timedelta(days=0):
         # cert has already expired - uhoh!
-        log.warn("Cert expired %s days ago" % remaining.days)
+        # log.warn("Cert expired %s days ago" % remaining.days)
+        pass
     elif remaining < datetime.timedelta(days=buffer_days):
         # expires sooner than the buffer
         return False
     else:
         # everything is fine
         return True
+
 
 def send(r, pool=None, stream=False, callback=None):
     """Sends the request object using the specified pool. If a pool isn't
@@ -134,7 +138,6 @@ def send(r, pool=None, stream=False, callback=None):
         return pool.spawn(r.send, stream=stream)
 
     return gevent.spawn(r.send, stream=stream)
-
 
 
 def map_requests(requests, stream=False, size=None):
@@ -153,22 +156,28 @@ def map_requests(requests, stream=False, size=None):
     return [r for r in requests]
 
 
-
 def check_status_code(req):
-    log.debug("[%s] checking status code waiting: %s actual: %s", req.url, req.waiting_status_code, req.response.status_code)
+    # log.debug("[%s] checking status code waiting: %s actual: %s", req.url, req.waiting_status_code, req.response.status_code)
     return req.response.status_code in req.waiting_status_code
+
 
 def check_response(req):
     resp_content = ""
     if req.response:
         resp_content = req.response.content
-    log.debug("[%s] response %s ", req.url, resp_content)
-    return req.response
+    # log.debug("[%s] response %s ", req.url, resp_content)
+    return True
+
+
+# return req.response
+# return True
 
 def check_cert(req):
     if not req.check_cert:
         return True
+
     return ssl_expires_in(req.domain_name)
+
     #
     #
     #
@@ -182,6 +191,7 @@ def check_cert(req):
     #             return False
     #         return matches[0].value == v
 
+
 def notify_by_ovo(url, channel, username, description, icon_emoji):
     pass
 
@@ -189,30 +199,31 @@ def notify_by_ovo(url, channel, username, description, icon_emoji):
 def get_request(k, urlconf, callback=None, session=None):
     r = AsyncRequest(
 
-            method = urlconf.get('method', 'GET'),
-            timeout = urlconf.get('timeout', 5.0),
-            url = urlconf['url'],
-            allow_redirects = urlconf.get('allow_redirects', True),
-            headers = urlconf.get('headers', None),
-            data = urlconf.get('data', None),
-            session = session,
-            callback = callback
+        method=urlconf.get('method', 'GET'),
+        timeout=urlconf.get('timeout', 5.0),
+        url=urlconf['url'],
+        allow_redirects=urlconf.get('allow_redirects', True),
+        headers=urlconf.get('headers', None),
+        verify=False,
+        auth=(urlconf.get('username', None), urlconf.get('password', None)),
+        session=session,
+        callback=callback
 
-        )
+    )
     r.name = k
     r.waiting_status_code = urlconf.get('status_code', None)
-    r.check_cert = urlconf.get('check_sert', True)
+    r.check_cert = urlconf.get('check_cert', False)
     if not r.waiting_status_code:
         r.waiting_status_code = [200]
 
     return r
 
+
 checks = [
     check_response,
     check_status_code,
     check_cert
- ]
-
+]
 
 ready = gevent.event.Event()
 ready.clear()
@@ -220,18 +231,23 @@ ready.clear()
 finished_jobs = 0
 sync_map = []
 
+
 def finished(result):
     global exit_code, finished_jobs
     finished_jobs += 1
 
     if finished_jobs == len(sync_map):
-        log.info('all waiting jobs are completed.')
+        # log.info('all waiting jobs are completed.')
         ready.set()
+
 
 exit_code = 0
 
+
 def main():
     global exit_code
+    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+    sys.tracebacklimit = 0
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', help='config file',
@@ -239,22 +255,20 @@ def main():
     args = parser.parse_args()
     config = yaml.load(open(args.config_file))
 
-    logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
+    # logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
 
     rs = []
 
     for k, urlconf in config['urls'].items():
 
-        # different sessions can run in parallel
         if isinstance(urlconf, list):
             for c in urlconf:
-                r = get_request(k,c)
+                r = get_request(k, c)
                 rs.append(r)
 
         else:
             r = get_request(k, urlconf)
             rs.append(r)
-
 
     reqs = map_requests(rs, size=config.get('pool_size', 10))
 
@@ -280,17 +294,18 @@ def main():
 
                 break
             else:
-                log.info(req.name +" " + check.__name__ + " OK")
+                # log.info(req.name +" " + check.__name__ + " OK")
+                pass
 
         if not failed:
             elapsed = req.response.elapsed.total_seconds()
 
         else:
             exit_code = 2
-        log.info("[%s] completed in %s", req.name, elapsed)
-
+            # log.info("[%s] completed in %s", req.name, elapsed)
 
     sys.exit(exit_code)
+
 
 if __name__ == "__main__":
     main()
