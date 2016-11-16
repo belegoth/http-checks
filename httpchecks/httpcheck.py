@@ -5,6 +5,12 @@ try:
 except ImportError:
     raise RuntimeError('Gevent is required.')
 
+import os, re, threading
+import datetime
+import sys
+
+sys.path.append(".\..\common")
+#import ovo_msg_cli
 import yaml
 import socket
 import logging
@@ -105,9 +111,9 @@ def ssl_valid_time_remaining(hostname):
     """Get the number of days left in a cert's lifetime."""
     expires = ssl_expiry_datetime(hostname)
     log.debug(
-           "SSL cert for %s expires at %s",
-           hostname, expires.isoformat()
-      )
+        "SSL cert for %s expires at %s",
+        hostname, expires.isoformat()
+    )
     return expires - datetime.datetime.utcnow()
 
 
@@ -121,7 +127,7 @@ def ssl_expires_in(hostname, buffer_days=14):
     # if the cert expires in less than two weeks, we should reissue it
     if remaining < datetime.timedelta(days=0):
         # cert has already expired - uhoh!
-        #log.warn("Cert expired %s days ago" % remaining.days)
+        # log.warn("Cert expired %s days ago" % remaining.days)
         pass
 
     elif remaining < datetime.timedelta(days=buffer_days):
@@ -159,7 +165,6 @@ def map_requests(requests, stream=False, size=None):
 
 
 def check_status_code(req):
-
     if req.response:
         log.debug("[%s] checking status code waiting: %s actual: %s", req.url, req.waiting_status_code,
                   req.response.status_code)
@@ -173,7 +178,7 @@ def check_response(req):
     if req.response:
         resp_content = req.response.content
         return True
-    #log.debug("[%s] response %s ", req.url, resp_content)
+    # log.debug("[%s] response %s ", req.url, resp_content)
     return None
 
 
@@ -236,10 +241,7 @@ checks = [
 ready = gevent.event.Event()
 ready.clear()
 
-
 sync_map = []
-
-
 
 exit_code = 0
 
@@ -255,8 +257,9 @@ def main():
     args = parser.parse_args()
     config = yaml.load(open(args.config_file))
 
-    #logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
-    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%d.%m.%Y %I:%M:%S', level=config['settings'].get('log_level', 'CRITICAL').upper())
+    # logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
+    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%d.%m.%Y %I:%M:%S',
+                        level=config['settings'].get('log_level', 'CRITICAL').upper())
 
     rs = []
 
@@ -280,7 +283,9 @@ def main():
 
             if not check(req):
                 failed = True
-                log.critical('%s: [%s] FAILED check - %s', req.name, req.url, check.__name__,  exc_info=False)
+                message = req.name + ": (From Internet) FAILED check - [" + req.url +"] Check type:" + check.__name__
+                log.critical(message, exc_info=False)
+ #               ovo_msg_cli.sendmsg(message, "FromR16HPOMAgent", "PR_HTTP1", req.name)
 
                 # ovo_config = config['settings'].get('ovo', None)
                 # if ovo_config:
@@ -295,7 +300,7 @@ def main():
 
                 break
             else:
-                log.info(req.name +" " + check.__name__ + " OK")
+                log.info(req.name + " " + check.__name__ + " OK")
 
     sys.exit(exit_code)
 
