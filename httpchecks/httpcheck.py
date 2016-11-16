@@ -74,9 +74,10 @@ class AsyncRequest(object):
             self.response = self.session.request(self.method,
                                                  self.url, **merged_kwargs)
         except:
-            log.error("cannot open [%s]" % self.url)
+            # log.error("cannot open [%s]" % self.url)
             # log.exception("[%s] gave exception" % self.url)
             # return
+            pass
         return self.response
 
     def __repr__(self):
@@ -103,10 +104,10 @@ def ssl_expiry_datetime(hostname):
 def ssl_valid_time_remaining(hostname):
     """Get the number of days left in a cert's lifetime."""
     expires = ssl_expiry_datetime(hostname)
-    # log.debug(
-    #        "SSL cert for %s expires at %s",
-    #       hostname, expires.isoformat()
-    #  )
+    log.debug(
+           "SSL cert for %s expires at %s",
+           hostname, expires.isoformat()
+      )
     return expires - datetime.datetime.utcnow()
 
 
@@ -120,8 +121,9 @@ def ssl_expires_in(hostname, buffer_days=14):
     # if the cert expires in less than two weeks, we should reissue it
     if remaining < datetime.timedelta(days=0):
         # cert has already expired - uhoh!
-        # log.warn("Cert expired %s days ago" % remaining.days)
+        #log.warn("Cert expired %s days ago" % remaining.days)
         pass
+
     elif remaining < datetime.timedelta(days=buffer_days):
         # expires sooner than the buffer
         return False
@@ -157,16 +159,22 @@ def map_requests(requests, stream=False, size=None):
 
 
 def check_status_code(req):
-    # log.debug("[%s] checking status code waiting: %s actual: %s", req.url, req.waiting_status_code, req.response.status_code)
-    return req.response.status_code in req.waiting_status_code
+
+    if req.response:
+        log.debug("[%s] checking status code waiting: %s actual: %s", req.url, req.waiting_status_code,
+                  req.response.status_code)
+        return req.response.status_code in req.waiting_status_code
+
+    return None
 
 
 def check_response(req):
     resp_content = ""
     if req.response:
         resp_content = req.response.content
-    # log.debug("[%s] response %s ", req.url, resp_content)
-    return True
+        return True
+    #log.debug("[%s] response %s ", req.url, resp_content)
+    return None
 
 
 # return req.response
@@ -228,17 +236,9 @@ checks = [
 ready = gevent.event.Event()
 ready.clear()
 
-finished_jobs = 0
+
 sync_map = []
 
-
-def finished(result):
-    global exit_code, finished_jobs
-    finished_jobs += 1
-
-    if finished_jobs == len(sync_map):
-        # log.info('all waiting jobs are completed.')
-        ready.set()
 
 
 exit_code = 0
@@ -255,7 +255,8 @@ def main():
     args = parser.parse_args()
     config = yaml.load(open(args.config_file))
 
-    # logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
+    #logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
+    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%d.%m.%Y %I:%M:%S', level=config['settings'].get('log_level', 'CRITICAL').upper())
 
     rs = []
 
@@ -273,13 +274,13 @@ def main():
     reqs = map_requests(rs, size=config.get('pool_size', 10))
 
     for req in reqs:
-        elapsed = -1
+
         failed = False
         for check in checks:
 
             if not check(req):
                 failed = True
-                log.critical('[%s] FAILED check - %s', req.name, check.__name__)
+                log.critical('%s: [%s] FAILED check - %s', req.name, req.url, check.__name__,  exc_info=False)
 
                 # ovo_config = config['settings'].get('ovo', None)
                 # if ovo_config:
@@ -294,15 +295,7 @@ def main():
 
                 break
             else:
-                # log.info(req.name +" " + check.__name__ + " OK")
-                pass
-
-        if not failed:
-            elapsed = req.response.elapsed.total_seconds()
-
-        else:
-            exit_code = 2
-            # log.info("[%s] completed in %s", req.name, elapsed)
+                log.info(req.name +" " + check.__name__ + " OK")
 
     sys.exit(exit_code)
 
