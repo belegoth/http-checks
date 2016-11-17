@@ -4,12 +4,12 @@ try:
     from gevent.pool import Pool
 except ImportError:
     raise RuntimeError('Gevent is required.')
-
 import os, re, threading
 import datetime
 import sys
 
 sys.path.append(".\..\common")
+os.chdir('c:\\distr\pr_mon\pr_http')
 #import ovo_msg_cli
 import yaml
 import socket
@@ -26,6 +26,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from requests import Session
 
 log = logging.getLogger(__name__)
+
 # Monkey-patch.
 gmonkey.patch_all(thread=False, select=False)
 
@@ -64,7 +65,7 @@ class AsyncRequest(object):
         self.error = None
         self.name = None
         self.waiting_status_code = None
-        self.check_cert = None
+        self.check_cert = False
 
     def send(self, **kwargs):
         """
@@ -127,7 +128,7 @@ def ssl_expires_in(hostname, buffer_days=14):
     # if the cert expires in less than two weeks, we should reissue it
     if remaining < datetime.timedelta(days=0):
         # cert has already expired - uhoh!
-        # log.warn("Cert expired %s days ago" % remaining.days)
+        log.warn("Cert expired %s days ago" % remaining.days)
         pass
 
     elif remaining < datetime.timedelta(days=buffer_days):
@@ -168,7 +169,14 @@ def check_status_code(req):
     if req.response:
         log.debug("[%s] checking status code waiting: %s actual: %s", req.url, req.waiting_status_code,
                   req.response.status_code)
-        return req.response.status_code in req.waiting_status_code
+
+        if req.response.status_code in req.waiting_status_code:
+            return True
+        else:
+            messagecode = req.name + ": (From Internet) wrong response code. Expected: " + str(
+                req.waiting_status_code) + ", actual:" + str(req.response.status_code)
+            log.critical(messagecode, exc_info=False)
+#            ovo_msg_cli.sendmsg(messagecode, "FromR16HPOMAgent", "PR_HTTP", req.name)
 
     return None
 
@@ -176,33 +184,25 @@ def check_status_code(req):
 def check_response(req):
     resp_content = ""
     if req.response:
-        resp_content = req.response.content
+
         return True
-    # log.debug("[%s] response %s ", req.url, resp_content)
+
+    else:
+        message = req.name + ": (From Internet) failed opening " + req.url
+        log.critical(message, exc_info=False)
+#        ovo_msg_cli.sendmsg(message, "FromR16HPOMAgent", "PR_HTTP", req.name)
+
     return None
 
 
-# return req.response
-# return True
-
 def check_cert(req):
-    if not req.check_cert:
-        return True
-
-    return ssl_expires_in(req.domain_name)
-
-    #
-    #
-    #
-    #
-    # j = json.loads(req.response.content)
-    # for check in req.check_json:
-    #     for k, v in check.items():
-    #         path = parse(k)
-    #         matches = path.find(j)
-    #         if not matches:
-    #             return False
-    #         return matches[0].value == v
+    if req.response:
+        if not req.check_cert:
+            return True
+        else:
+            return ssl_expires_in(req.domain_name)
+    else:
+        return None
 
 
 def notify_by_ovo(url, channel, username, description, icon_emoji):
@@ -257,10 +257,16 @@ def main():
     args = parser.parse_args()
     config = yaml.load(open(args.config_file))
 
-    # logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%d.%m.%Y %I:%M:%S',
                         level=config['settings'].get('log_level', 'CRITICAL').upper())
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler = logging.FileHandler('pr_http.log')
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
 
+    # logging.basicConfig(level=config['settings'].get('log_level', 'DEBUG').upper())
+    log.propagate = False
+    log.info("Start")
     rs = []
 
     for k, urlconf in config['urls'].items():
@@ -283,25 +289,11 @@ def main():
 
             if not check(req):
                 failed = True
-                message = req.name + ": (From Internet) FAILED check - [" + req.url +"] Check type:" + check.__name__
-                log.critical(message, exc_info=False)
- #               ovo_msg_cli.sendmsg(message, "FromR16HPOMAgent", "PR_HTTP1", req.name)
 
-                # ovo_config = config['settings'].get('ovo', None)
-                # if ovo_config:
-                #     notify_by_ovo(
-                #         print("Send to OVO %s", req.name)
-                #         # url = slack_config['url'],
-                #         # channel  = slack_config['channel'],
-                #         # username  = slack_config['username'],
-                #         # description  = '[%s] FAILED check - %s - %s' % (req.name, req.url, check.__name__),
-                #         # icon_emoji = slack_config['icon_emoji']
-                #     )
-
-                break
             else:
                 log.info(req.name + " " + check.__name__ + " OK")
 
+    log.info("Finish")
     sys.exit(exit_code)
 
 
